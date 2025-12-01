@@ -65,6 +65,8 @@ func BuildCharacter(ctx *context.Context) (context.Character, error) {
 		return &Berserker{BaseCharacter: bc}, nil // Return a pointer to Berserker
 	case "warcry_barb":
 		return &WarcryBarb{BaseCharacter: bc}, nil
+	case "wolfbarb":
+		return &WolfBarb{BaseCharacter: bc}, nil
 	case "development":
 		return DevelopmentCharacter{BaseCharacter: bc}, nil
 	}

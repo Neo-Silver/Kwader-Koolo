@@ -56,6 +56,21 @@ func Buff() {
 		utils.Sleep(500)
 	}
 
+	// wolfbarb special handling
+	if ctx.CharacterCfg.Character.Class == "wolfbarb" {
+		if ctx.Data.PlayerUnit.States.HasState(state.Wolf) {
+			kb, found := ctx.Data.KeyBindings.KeyBindingForSkill(skill.Werewolf)
+			if found {
+				utils.Sleep(100)
+				ctx.HID.PressKeyBinding(kb)
+				utils.Sleep(180)
+				ctx.HID.Click(game.RightButton, 640, 340)
+				utils.Sleep(100)
+				ctx.RefreshGameData()
+			}
+		}
+	}
+
 	preKeys := make([]data.KeyBinding, 0)
 	for _, buff := range ctx.Char.PreCTABuffSkills() {
 		kb, found := ctx.Data.KeyBindings.KeyBindingForSkill(buff)
@@ -76,8 +91,20 @@ func Buff() {
 			utils.Sleep(100)
 		}
 	}
-
-	buffCTA()
+	// WolfBarb specific buffing
+	if ctx.CharacterCfg.Character.Class == "wolfbarb" {
+		if ctaFound(*ctx.Data) {
+			if ctx.Data.ActiveWeaponSlot != 1 {
+				for ctx.Data.ActiveWeaponSlot != 1 {
+					ctx.HID.PressKeyBinding(ctx.Data.KeyBindings.SwapWeapons)
+					utils.Sleep(200)
+					ctx.RefreshGameData()
+				}
+			}
+		}
+	} else {
+		buffCTA()
+	}
 
 	postKeys := make([]data.KeyBinding, 0)
 	for _, buff := range ctx.Char.BuffSkills() {
@@ -92,13 +119,38 @@ func Buff() {
 	if len(postKeys) > 0 {
 		ctx.Logger.Debug("Post CTA Buffing...")
 
-		for _, kb := range postKeys {
+		for _, buff := range ctx.Char.BuffSkills() {
+			kb, found := ctx.Data.KeyBindings.KeyBindingForSkill(buff)
+			if !found {
+				continue
+			}
+			if ctx.CharacterCfg.Character.Class == "wolfbarb" && buff == skill.Werewolf {
+				if ctx.Data.PlayerUnit.States.HasState(state.Wolf) {
+					ctx.Logger.Debug("Werewolf state already active, skipping cast")
+					continue
+				}
+			}
+
 			utils.Sleep(100)
 			ctx.HID.PressKeyBinding(kb)
 			utils.Sleep(180)
 			ctx.HID.Click(game.RightButton, 640, 340)
 			utils.Sleep(100)
 		}
+
+		// For WolfBarb: swap back to main weapon after buffing
+		if ctx.CharacterCfg.Character.Class == "wolfbarb" {
+			if ctaFound(*ctx.Data) {
+				if ctx.Data.ActiveWeaponSlot != 0 {
+					for ctx.Data.ActiveWeaponSlot != 0 {
+						ctx.HID.PressKeyBinding(ctx.Data.KeyBindings.SwapWeapons)
+						utils.Sleep(200)
+						ctx.RefreshGameData()
+					}
+				}
+			}
+		}
+
 		ctx.LastBuffAt = time.Now()
 	}
 }
@@ -120,6 +172,9 @@ func IsRebuffRequired() bool {
 	buffs := ctx.Char.BuffSkills()
 	for _, buff := range buffs {
 		if _, found := ctx.Data.KeyBindings.KeyBindingForSkill(buff); found {
+			if buff == skill.Werewolf && !ctx.Data.PlayerUnit.States.HasState(state.Wolf) {
+				return true
+			}
 			if buff == skill.HolyShield && !ctx.Data.PlayerUnit.States.HasState(state.Holyshield) {
 				return true
 			}
