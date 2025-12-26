@@ -126,20 +126,20 @@ outer:
 				ctx.Logger.Debug("No fitting items found for pickup after filtering.")
 			}
 			if HasTPsAvailable() {
-				consecutiveNoFitTownTrips++
-				if consecutiveNoFitTownTrips > 1 {
-					// Prevent endless TP-town-TP loops when an item can never fit.
-					ctx.Logger.Warn("No fitting items after a town cleanup; stopping pickup cycle to avoid loops.")
-					return nil
-				}
-
 				if debugPickit {
-					ctx.Logger.Debug("TPs available, returning to town to sell junk and stash items.")
+					ctx.Logger.Debug("TPs available and keybinding found, returning to town to sell junk and stash items.")
+				}
+				wasHighPriority := ctx.Priority == context.PriorityHigh
+				if wasHighPriority {
+					ctx.SwitchPriority(context.PriorityNormal)
 				}
 				if err := InRunReturnTownRoutine(); err != nil {
 					ctx.Logger.Warn("Failed returning to town from ItemPickup", "error", err)
 				}
 				continue
+			} else {
+				ctx.Logger.Warn("Inventory is full and NO Town Portals found. Skipping return to town and continuing current run (no more item pickups this cycle).")
+				return nil
 			}
 
 			ctx.Logger.Warn("Inventory is full and NO Town Portals found. Skipping return to town and continuing current run (no more item pickups this cycle).")
