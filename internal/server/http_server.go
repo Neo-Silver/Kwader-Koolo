@@ -718,6 +718,7 @@ func (s *HttpServer) Listen(port int) error {
 	http.HandleFunc("/drops", s.drops)
 	http.HandleFunc("/all-drops", s.allDrops)
 	http.HandleFunc("/export-drops", s.exportDrops)
+	http.HandleFunc("/group-stats", s.groupStats)
 	http.HandleFunc("/open-droplogs", s.openDroplogs)
 	http.HandleFunc("/reset-droplogs", s.resetDroplogs)
 	http.HandleFunc("/process-list", s.getProcessList)
@@ -791,12 +792,12 @@ func (s *HttpServer) reloadConfig(w http.ResponseWriter, r *http.Request) {
 
 // SchedulerHistoryEntry matches bot.HistoryEntry for JSON serialization
 type SchedulerHistoryEntry struct {
-	Date              string                  `json:"date"`
-	WakeTime          string                  `json:"wakeTime"`
-	SleepTime         string                  `json:"sleepTime"`
-	TotalPlayMinutes  int                     `json:"totalPlayMinutes"`
-	TotalBreakMinutes int                     `json:"totalBreakMinutes"`
-	Breaks            []SchedulerBreakEntry   `json:"breaks"`
+	Date              string                `json:"date"`
+	WakeTime          string                `json:"wakeTime"`
+	SleepTime         string                `json:"sleepTime"`
+	TotalPlayMinutes  int                   `json:"totalPlayMinutes"`
+	TotalBreakMinutes int                   `json:"totalBreakMinutes"`
+	Breaks            []SchedulerBreakEntry `json:"breaks"`
 }
 
 type SchedulerBreakEntry struct {
@@ -1222,6 +1223,14 @@ func (s *HttpServer) allDrops(w http.ResponseWriter, r *http.Request) {
 	s.templates.ExecuteTemplate(w, "all_drops.gohtml", AllDropsData{
 		Total:   len(rows),
 		Records: rows,
+	})
+}
+
+func (s *HttpServer) groupStats(w http.ResponseWriter, r *http.Request) {
+	s.templates.ExecuteTemplate(w, "group_stats.gohtml", struct {
+		Version string
+	}{
+		Version: config.Version,
 	})
 }
 
@@ -2604,6 +2613,36 @@ func (s *HttpServer) characterSettings(w http.ResponseWriter, r *http.Request) {
 		cfg.Companion.LeaderName = r.Form.Get("companionLeaderName")
 		cfg.Companion.GameNameTemplate = r.Form.Get("companionGameNameTemplate")
 		cfg.Companion.GamePassword = r.Form.Get("companionGamePassword")
+
+		// Group Leveling config
+		cfg.GroupLeveling.Enabled = r.Form.Has("groupLevelingEnabled")
+		cfg.GroupLeveling.GroupName = r.Form.Get("groupLevelingGroupName")
+		cfg.GroupLeveling.Role = r.Form.Get("groupLevelingRole")
+		cfg.GroupLeveling.ElectionMode = r.Form.Get("groupLevelingElectionMode")
+
+		// Parse group members from comma-separated list
+		membersStr := r.Form.Get("groupLevelingMembers")
+		if membersStr != "" {
+			members := strings.Split(membersStr, ",")
+			cfg.GroupLeveling.Members = make([]string, 0, len(members))
+			for _, member := range members {
+				trimmed := strings.TrimSpace(member)
+				if trimmed != "" {
+					cfg.GroupLeveling.Members = append(cfg.GroupLeveling.Members, trimmed)
+				}
+			}
+		} else {
+			cfg.GroupLeveling.Members = []string{}
+		}
+
+		// Default to "auto" role if empty
+		if cfg.GroupLeveling.Role == "" {
+			cfg.GroupLeveling.Role = "auto"
+		}
+		// Default to "static" election mode if empty
+		if cfg.GroupLeveling.ElectionMode == "" {
+			cfg.GroupLeveling.ElectionMode = "static"
+		}
 
 		// Back to town config
 		cfg.BackToTown.NoHpPotions = r.Form.Has("noHpPotions")

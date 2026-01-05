@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="../assets/css/pico.min.css">
+    <link rel="stylesheet" href="../assets/css/custom.css">
+    <link rel="stylesheet" href="../assets/css/bootstrap-icons.css">
+    <title>Group Leveling Stats - Koolo</title>
+    <style>
+        .group-container {
+            padding: 2rem 0;
+        }
+        .group-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+        .group-grid {
+            display: grid;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        .group-card {
+            background: var(--pico-card-background-color);
+            border-radius: var(--pico-border-radius);
+            padding: 1.5rem;
+            border: 1px solid var(--pico-muted-border-color);
+        }
+        .group-card h3 {
+            margin: 0 0 1rem 0;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .group-card h3 i {
+            color: var(--pico-primary);
+        }
+        .group-members {
+            display: grid;
+            gap: 1rem;
+        }
+        .member-card {
+            background: rgba(var(--pico-primary-background), 0.05);
+            border-radius: var(--pico-border-radius);
+            padding: 1rem;
+            border-left: 3px solid var(--pico-primary);
+        }
+        .member-card.leader {
+            border-left-color: #ffd700;
+            background: rgba(255, 215, 0, 0.05);
+        }
+        .member-card.follower {
+            border-left-color: #4a9eff;
+        }
+        .member-card.teleporter {
+            border-left-color: #a64dff;
+        }
+        .member-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.75rem;
+        }
+        .member-name {
+            font-size: 1.1rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .role-badge {
+            font-size: 0.75rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            background: var(--pico-primary);
+            color: white;
+            text-transform: uppercase;
+        }
+        .status-badge {
+            font-size: 0.75rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+        }
+        .status-badge.running {
+            background: #28a745;
+            color: white;
+        }
+        .status-badge.paused {
+            background: #ffc107;
+            color: black;
+        }
+        .status-badge.stopped {
+            background: #6c757d;
+            color: white;
+        }
+        .member-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 0.75rem;
+            margin-top: 0.75rem;
+        }
+        .stat-box {
+            text-align: center;
+            padding: 0.5rem;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 0.25rem;
+        }
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--pico-muted-color);
+            margin-bottom: 0.25rem;
+        }
+        .stat-value {
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+        .member-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+            font-size: 0.875rem;
+        }
+        .detail-item {
+            display: flex;
+            justify-content: space-between;
+        }
+        .detail-label {
+            color: var(--pico-muted-color);
+        }
+        .quest-progress {
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--pico-muted-border-color);
+        }
+        .quest-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+        .quest-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+        }
+        .quest-item i {
+            color: #28a745;
+        }
+        .quest-item.incomplete i {
+            color: var(--pico-muted-color);
+        }
+        .no-groups {
+            text-align: center;
+            padding: 3rem;
+            color: var(--pico-muted-color);
+        }
+        .back-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+<main class="container group-container">
+    <div class="group-header">
+        <h1><i class="bi bi-people-fill"></i> Group Leveling Stats</h1>
+        <a href="/" class="back-button" role="button"><i class="bi bi-arrow-left"></i> Back to Dashboard</a>
+    </div>
+    
+    <div id="groups-container">
+        <div class="no-groups">
+            <h3>No Active Group Leveling Sessions</h3>
+            <p>Enable group leveling in character settings to see group statistics here.</p>
+        </div>
+    </div>
+</main>
+
+<script>
+let ws;
+let reconnectInterval;
+
+function connectWebSocket() {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+    
+    ws.onopen = function() {
+        console.log('WebSocket connected');
+        if (reconnectInterval) {
+            clearInterval(reconnectInterval);
+            reconnectInterval = null;
+        }
+    };
+    
+    ws.onmessage = function(event) {
+        try {
+            const data = JSON.parse(event.data);
+            updateGroupStats(data);
+        } catch (e) {
+            console.error('Error parsing WebSocket message:', e);
+        }
+    };
+    
+    ws.onclose = function() {
+        console.log('WebSocket disconnected, attempting to reconnect...');
+        if (!reconnectInterval) {
+            reconnectInterval = setInterval(connectWebSocket, 3000);
+        }
+    };
+    
+    ws.onerror = function(error) {
+        console.error('WebSocket error:', error);
+    };
+}
+
+function updateGroupStats(data) {
+    if (!data) return;
+    
+    // Group bots by their group name
+    const groups = {};
+    
+    Object.entries(data).forEach(([charName, charData]) => {
+        if (!charData.Config || !charData.Config.GroupLeveling || !charData.Config.GroupLeveling.Enabled) {
+            return;
+        }
+        
+        const groupName = charData.Config.GroupLeveling.GroupName || 'default';
+        if (!groups[groupName]) {
+            groups[groupName] = [];
+        }
+        
+        groups[groupName].push({
+            name: charName,
+            data: charData
+        });
+    });
+    
+    const container = document.getElementById('groups-container');
+    
+    if (Object.keys(groups).length === 0) {
+        container.innerHTML = `
+            <div class="no-groups">
+                <h3>No Active Group Leveling Sessions</h3>
+                <p>Enable group leveling in character settings to see group statistics here.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    let html = '';
+    
+    Object.entries(groups).forEach(([groupName, members]) => {
+        html += renderGroupCard(groupName, members);
+    });
+    
+    container.innerHTML = html;
+}
+
+function renderGroupCard(groupName, members) {
+    let html = `
+        <div class="group-card">
+            <h3><i class="bi bi-people-fill"></i> ${groupName} <span style="font-size: 0.875rem; color: var(--pico-muted-color);">(${members.length} member${members.length !== 1 ? 's' : ''})</span></h3>
+            <div class="group-members">
+    `;
+    
+    // Sort members: leader first, then by role priority
+    members.sort((a, b) => {
+        const roleA = a.data.Config?.GroupLeveling?.Role || 'auto';
+        const roleB = b.data.Config?.GroupLeveling?.Role || 'auto';
+        if (roleA === 'leader') return -1;
+        if (roleB === 'leader') return 1;
+        return 0;
+    });
+    
+    members.forEach(member => {
+        html += renderMemberCard(member);
+    });
+    
+    html += `
+            </div>
+        </div>
+    `;
+    
+    return html;
+}
+
+function renderMemberCard(member) {
+    const config = member.data.Config || {};
+    const ui = member.data.UI || {};
+    const games = member.data.Games || [];
+    const role = config.GroupLeveling?.Role || 'auto';
+    const status = member.data.Status || 'Stopped';
+    
+    // Calculate stats
+    const stats = calculateStats(games);
+    const dropCount = member.data.Drops || 0;
+    
+    // Get status class
+    let statusClass = 'stopped';
+    if (status === 'In game' || status === 'Starting') statusClass = 'running';
+    else if (status === 'Paused') statusClass = 'paused';
+    
+    let html = `
+        <div class="member-card ${role}">
+            <div class="member-header">
+                <div class="member-name">
+                    ${member.name}
+                    <span class="role-badge">${role}</span>
+                </div>
+                <span class="status-badge ${statusClass}">${status}</span>
+            </div>
+            
+            <div class="member-stats">
+                <div class="stat-box">
+                    <div class="stat-label">Level</div>
+                    <div class="stat-value">${ui.Level || '—'}</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Games</div>
+                    <div class="stat-value">${stats.totalGames}</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Deaths</div>
+                    <div class="stat-value">${stats.totalDeaths}</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Chickens</div>
+                    <div class="stat-value">${stats.totalChickens}</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Drops</div>
+                    <div class="stat-value">${dropCount}</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Errors</div>
+                    <div class="stat-value">${stats.totalErrors}</div>
+                </div>
+            </div>
+            
+            <div class="member-details">
+                <div class="detail-item">
+                    <span class="detail-label">Class:</span>
+                    <span>${ui.Class || '—'}</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Difficulty:</span>
+                    <span>${ui.Difficulty || '—'}</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Area:</span>
+                    <span>${ui.Area || '—'}</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Life:</span>
+                    <span>${ui.Life ? ui.Life + '/' + ui.MaxLife : '—'}</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Mana:</span>
+                    <span>${ui.Mana ? ui.Mana + '/' + ui.MaxMana : '—'}</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">MF:</span>
+                    <span>${ui.MF || '—'}</span>
+                </div>
+            </div>
+    `;
+    
+    html += `
+        </div>
+    `;
+    
+    return html;
+}
+
+function calculateStats(games) {
+    if (!games || games.length === 0) {
+        return {
+            totalGames: 0,
+            totalDeaths: 0,
+            totalChickens: 0,
+            totalErrors: 0
+        };
+    }
+    
+    return games.reduce((acc, game) => {
+        acc.totalGames++;
+        if (game.Reason === 'death') acc.totalDeaths++;
+        if (game.Reason === 'chicken' || game.Reason === 'merc chicken') acc.totalChickens++;
+        if (game.Reason === 'error') acc.totalErrors++;
+        return acc;
+    }, {
+        totalGames: 0,
+        totalDeaths: 0,
+        totalChickens: 0,
+        totalErrors: 0
+    });
+}
+
+// Initialize WebSocket connection on page load
+connectWebSocket();
+
+// Fetch initial data
+fetch('/initial-data')
+    .then(response => response.json())
+    .then(data => updateGroupStats(data))
+    .catch(error => console.error('Error fetching initial data:', error));
+</script>
+</body>
+</html>

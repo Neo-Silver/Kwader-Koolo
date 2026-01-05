@@ -331,22 +331,22 @@ type CharacterCfg struct {
 	} `yaml:"character"`
 
 	Game struct {
-		MinGoldPickupThreshold int                   `yaml:"minGoldPickupThreshold"`
-		UseCainIdentify        bool                  `yaml:"useCainIdentify"`
-		DisableIdentifyTome    bool                  `yaml:"disableIdentifyTome"`
-		InteractWithShrines    bool                  `yaml:"interactWithShrines"`
-		InteractWithChests     bool                  `yaml:"interactWithChests"`
-		InteractWithSuperChests bool                 `yaml:"interactWithSuperChests"`
-		StopLevelingAt         int                   `yaml:"stopLevelingAt"`
-		IsNonLadderChar        bool                  `yaml:"isNonLadderChar"`
-		ClearTPArea            bool                  `yaml:"clearTPArea"`
-		Difficulty             difficulty.Difficulty `yaml:"difficulty"`
-		RandomizeRuns          bool                  `yaml:"randomizeRuns"`
-		Runs                   []Run                 `yaml:"runs"`
-		CreateLobbyGames       bool                  `yaml:"createLobbyGames"`
-		PublicGameCounter      int                   `yaml:"-"`
-		MaxFailedMenuAttempts  int                   `yaml:"maxFailedMenuAttempts"`
-		Pindleskin             struct {
+		MinGoldPickupThreshold  int                   `yaml:"minGoldPickupThreshold"`
+		UseCainIdentify         bool                  `yaml:"useCainIdentify"`
+		DisableIdentifyTome     bool                  `yaml:"disableIdentifyTome"`
+		InteractWithShrines     bool                  `yaml:"interactWithShrines"`
+		InteractWithChests      bool                  `yaml:"interactWithChests"`
+		InteractWithSuperChests bool                  `yaml:"interactWithSuperChests"`
+		StopLevelingAt          int                   `yaml:"stopLevelingAt"`
+		IsNonLadderChar         bool                  `yaml:"isNonLadderChar"`
+		ClearTPArea             bool                  `yaml:"clearTPArea"`
+		Difficulty              difficulty.Difficulty `yaml:"difficulty"`
+		RandomizeRuns           bool                  `yaml:"randomizeRuns"`
+		Runs                    []Run                 `yaml:"runs"`
+		CreateLobbyGames        bool                  `yaml:"createLobbyGames"`
+		PublicGameCounter       int                   `yaml:"-"`
+		MaxFailedMenuAttempts   int                   `yaml:"maxFailedMenuAttempts"`
+		Pindleskin              struct {
 			SkipOnImmunities []stat.Resist `yaml:"skipOnImmunities"`
 		} `yaml:"pindleskin"`
 		Cows struct {
@@ -476,6 +476,13 @@ type CharacterCfg struct {
 		RunewordOverrides   map[string]RunewordOverrideConfig `yaml:"runewordOverrides,omitempty"`
 		RunewordRerollRules map[string][]RunewordRerollRule   `yaml:"runewordRerollRules,omitempty"`
 	} `yaml:"game"`
+	GroupLeveling struct {
+		Enabled      bool     `yaml:"enabled"`
+		GroupName    string   `yaml:"groupName"`
+		Role         string   `yaml:"role"`         // "leader", "follower", "auto"
+		ElectionMode string   `yaml:"electionMode"` // "static", "quest_credit" (recommended)
+		Members      []string `yaml:"members"`      // List of character/supervisor names in this group
+	} `yaml:"groupLeveling"`
 	Companion struct {
 		Enabled               bool   `yaml:"enabled"`
 		Leader                bool   `yaml:"leader"`

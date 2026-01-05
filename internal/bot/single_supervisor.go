@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"math/rand"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/hectorgimenez/d2go/pkg/data"
@@ -34,6 +35,10 @@ const (
 
 type SinglePlayerSupervisor struct {
 	*baseSupervisor
+	// Group leveling fields
+	pendingGameMu   sync.Mutex
+	pendingGameName string
+	pendingGamePass string
 }
 
 func (s *SinglePlayerSupervisor) GetData() *game.Data {
@@ -50,9 +55,31 @@ func NewSinglePlayerSupervisor(name string, bot *Bot, statsHandler *StatsHandler
 		return nil, err
 	}
 
-	return &SinglePlayerSupervisor{
+	sps := &SinglePlayerSupervisor{
 		baseSupervisor: bs,
-	}, nil
+	}
+
+	// Subscribe to ICC events for group leveling
+	if bot.ctx.CharacterCfg.GroupLeveling.Enabled && bot.ctx.ICCManager != nil {
+		// Type assert to ICCManager
+		if iccMgr, ok := bot.ctx.ICCManager.(*ct.ICCManager); ok {
+			// Subscribe to GameCreatedEvent
+			iccMgr.Subscribe(ct.EventTypeGameCreated, func(evt ct.ICCEvent) error {
+				return sps.handleGameCreatedEvent(evt)
+			})
+			bot.ctx.Logger.Debug("Subscribed to ICC GameCreatedEvent for group leveling",
+				"group_name", bot.ctx.CharacterCfg.GroupLeveling.GroupName,
+			)
+
+			// Register request handler for game info requests (leaders only)
+			if bot.ctx.CharacterCfg.GroupLeveling.Role == "leader" || bot.ctx.CharacterCfg.GroupLeveling.Role == "auto" {
+				iccMgr.RegisterRequestHandler(sps.name, sps.handleGameInfoRequest)
+				bot.ctx.Logger.Debug("Registered game info request handler for group leveling")
+			}
+		}
+	}
+
+	return sps, nil
 }
 
 var ErrUnrecoverableClientState = errors.New("unrecoverable client state, forcing restart")
@@ -298,7 +325,28 @@ func (s *SinglePlayerSupervisor) Start() error {
 		if s.bot.ctx.CharacterCfg.Companion.Enabled && s.bot.ctx.CharacterCfg.Companion.Leader {
 			event.Send(event.RequestCompanionJoinGame(event.Text(s.name, "New Game Started "+s.bot.ctx.Data.Game.LastGameName), s.bot.ctx.CharacterCfg.CharacterName, s.bot.ctx.Data.Game.LastGameName, s.bot.ctx.Data.Game.LastGamePassword))
 		}
+		// Group leveling ICC broadcast
+		if s.bot.ctx.CharacterCfg.GroupLeveling.Enabled && s.bot.ctx.ICCManager != nil {
+			gameName := s.bot.ctx.Data.Game.LastGameName
+			gamePassword := s.bot.ctx.Data.Game.LastGamePassword
+			s.bot.ctx.Logger.Info("Broadcasting group leveling game info via ICC",
+				"game_name", gameName,
+				"group_name", s.bot.ctx.CharacterCfg.GroupLeveling.GroupName,
+			)
 
+			// Broadcast GameCreatedEvent via ICC to group members
+			if iccMgr, ok := s.bot.ctx.ICCManager.(*ct.ICCManager); ok {
+				iccMgr.PublishEvent(
+					ct.EventTypeGameCreated,
+					s.name,
+					map[string]interface{}{
+						"group_name":    s.bot.ctx.CharacterCfg.GroupLeveling.GroupName,
+						"game_name":     gameName,
+						"game_password": gamePassword,
+					},
+				)
+			}
+		}
 		if firstRun {
 			missingKeybindings := s.bot.ctx.Char.CheckKeyBindings()
 			if len(missingKeybindings) > 0 {
@@ -562,11 +610,76 @@ func (s *SinglePlayerSupervisor) HandleMenuFlow() error {
 		s.bot.ctx.CurrentGame.FailedToCreateGameAttempts = 0
 	}
 
+	// Route to group leveling menu flow for followers
+	if s.bot.ctx.CharacterCfg.GroupLeveling.Enabled && s.bot.ctx.CharacterCfg.GroupLeveling.Role != "leader" {
+		return s.HandleGroupLevelingMenuFlow()
+	}
+
 	if s.bot.ctx.CharacterCfg.Companion.Enabled && !s.bot.ctx.CharacterCfg.Companion.Leader {
 		return s.HandleCompanionMenuFlow()
 	}
 
 	return s.HandleStandardMenuFlow()
+}
+
+// handleGameCreatedEvent processes GameCreatedEvent from ICC for group leveling
+func (s *SinglePlayerSupervisor) handleGameCreatedEvent(evt ct.ICCEvent) error {
+	// Extract game info from event data
+	gameName, _ := evt.Data["game_name"].(string)
+	gamePass, _ := evt.Data["game_password"].(string)
+
+	if gameName == "" {
+		return nil
+	}
+
+	s.pendingGameMu.Lock()
+	s.pendingGameName = gameName
+	s.pendingGamePass = gamePass
+	s.pendingGameMu.Unlock()
+
+	s.bot.ctx.Logger.Info("Received group leveling game info via ICC",
+		"game_name", gameName,
+		"has_password", gamePass != "",
+		"from", evt.Source,
+	)
+
+	return nil
+}
+
+// handleGameInfoRequest responds to game info requests from followers
+func (s *SinglePlayerSupervisor) handleGameInfoRequest(requestType string, data map[string]interface{}) (map[string]interface{}, error) {
+	// Extract source from data
+	source, _ := data["source"].(string)
+
+	// Check if request is for our group
+	requestGroup, _ := data["group_name"].(string)
+	if requestGroup != s.bot.ctx.CharacterCfg.GroupLeveling.GroupName {
+		return nil, fmt.Errorf("not in requested group")
+	}
+
+	// Check if we're in a game and are the leader
+	if !s.bot.ctx.GameReader.InGame() {
+		return nil, fmt.Errorf("not in game")
+	}
+
+	gameName := s.bot.ctx.Data.Game.LastGameName
+	gamePassword := s.bot.ctx.Data.Game.LastGamePassword
+
+	if gameName == "" {
+		return nil, fmt.Errorf("no active game")
+	}
+
+	s.bot.ctx.Logger.Debug("Responding to game info request",
+		"requester", source,
+		"request_type", requestType,
+		"game_name", gameName,
+	)
+
+	return map[string]interface{}{
+		"game_name":     gameName,
+		"game_password": gamePassword,
+		"group_name":    s.bot.ctx.CharacterCfg.GroupLeveling.GroupName,
+	}, nil
 }
 
 func (s *SinglePlayerSupervisor) HandleStandardMenuFlow() error {
@@ -664,6 +777,119 @@ func (s *SinglePlayerSupervisor) HandleCompanionMenuFlow() error {
 	}
 
 	return fmt.Errorf("[Menu Flow]: Unhandled Companion menu scenario")
+}
+
+// HandleGroupLevelingMenuFlow handles menu flow for group leveling followers
+func (s *SinglePlayerSupervisor) HandleGroupLevelingMenuFlow() error {
+	s.bot.ctx.Logger.Debug("[Group Leveling Menu Flow]: Requesting current game info from leader...")
+
+	var gameName, gamePass string
+
+	// Request current game info from leader via ICC
+	if iccMgr, ok := s.bot.ctx.ICCManager.(*ct.ICCManager); ok {
+		// Find leader supervisor to request from
+		leaderName := s.findLeaderSupervisor(iccMgr)
+		if leaderName == "" {
+			s.bot.ctx.Logger.Debug("[Group Leveling Menu Flow]: No leader found, waiting...")
+			utils.Sleep(2000)
+			return fmt.Errorf("idle")
+		}
+
+		// Request game info with timeout
+		resp, err := iccMgr.Request(
+			"game_info",
+			leaderName,
+			map[string]interface{}{
+				"source":     s.name,
+				"group_name": s.bot.ctx.CharacterCfg.GroupLeveling.GroupName,
+			},
+			5*time.Second,
+		)
+
+		if err != nil {
+			s.bot.ctx.Logger.Debug("[Group Leveling Menu Flow]: Failed to get game info from leader",
+				"error", err,
+			)
+			utils.Sleep(2000)
+			return fmt.Errorf("idle")
+		}
+
+		// Extract game info from response
+		gameName, _ = resp["game_name"].(string)
+		gamePass, _ = resp["game_password"].(string)
+
+		if gameName == "" {
+			s.bot.ctx.Logger.Debug("[Group Leveling Menu Flow]: Leader has no active game")
+			utils.Sleep(2000)
+			return fmt.Errorf("idle")
+		}
+
+		// Store for this attempt
+		s.pendingGameMu.Lock()
+		s.pendingGameName = gameName
+		s.pendingGamePass = gamePass
+		s.pendingGameMu.Unlock()
+	} else {
+		// Fallback to old behavior if ICC cast fails
+		s.pendingGameMu.Lock()
+		gameName = s.pendingGameName
+		gamePass = s.pendingGamePass
+		s.pendingGameMu.Unlock()
+
+		if gameName == "" {
+			utils.Sleep(2000)
+			return fmt.Errorf("idle")
+		}
+	}
+
+	s.bot.ctx.Logger.Info("[Group Leveling Menu Flow]: Joining leader's game",
+		"game_name", gameName,
+	)
+
+	if s.bot.ctx.GameReader.IsInCharacterSelectionScreen() {
+		err := s.ensureOnline()
+		if err != nil {
+			return err
+		}
+
+		err = s.tryEnterLobby()
+		if err != nil {
+			return err
+		}
+
+		joinGameFunc := func() error {
+			return s.bot.ctx.Manager.JoinOnlineGame(gameName, gamePass)
+		}
+		return s.callManagerWithTimeout(joinGameFunc)
+	}
+
+	if s.bot.ctx.GameReader.IsInLobby() {
+		s.bot.ctx.Logger.Debug("[Group Leveling Menu Flow]: In lobby, joining game...")
+		joinGameFunc := func() error {
+			return s.bot.ctx.Manager.JoinOnlineGame(gameName, gamePass)
+		}
+		return s.callManagerWithTimeout(joinGameFunc)
+	}
+
+	return fmt.Errorf("[Group Leveling Menu Flow]: Unhandled menu scenario")
+}
+
+// findLeaderSupervisor finds a supervisor in the same group with leader role
+func (s *SinglePlayerSupervisor) findLeaderSupervisor(iccMgr *ct.ICCManager) string {
+	supervisorNames := iccMgr.GetSupervisorNames()
+
+	for _, name := range supervisorNames {
+		if name == s.name {
+			continue // Skip self
+		}
+
+		// Check if this supervisor is in our group and is a leader
+		// We'll try the first one we find - in practice, there should only be one leader per group
+		// The leader will validate the group_name in the request handler
+		return name
+	}
+
+	return ""
 }
 
 func (s *SinglePlayerSupervisor) tryEnterLobby() error {

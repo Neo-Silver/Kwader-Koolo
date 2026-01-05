@@ -221,6 +221,15 @@ game:
       - 121 # Nihlathak's Temple (Will do Nihlathak run)
       - 128 # The Worldstone Keep Level 1 (Will do Baal run)
 
+groupLeveling:
+  enabled: false
+  groupName: my-party # Group name for coordination (all bots in same group must match)
+  role: auto # Role in group: auto, leader, follower, teleporter, bo_barb, rusher
+  electionMode: static # Leader election: static (use configured roles), quest_credit (auto-promote on quest failure)
+  members: [] # IMPORTANT: List all character names in group (e.g., [CharName1, CharName2, CharName3])
+              # This ensures leader waits for ALL members before starting the run
+              # Leave empty for dynamic discovery (NOT recommended - may cause race conditions)
+
 companion:
   enabled: false
   leader: true

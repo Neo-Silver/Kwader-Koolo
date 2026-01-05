@@ -64,10 +64,25 @@ type Context struct {
 	RestartWithCharacter  string
 	PacketSender          *game.PacketSender
 	IsLevelingCharacter   *bool
-	ManualModeActive      bool          // Manual play mode: stops after character selection
-	LastPortalTick        time.Time     // NEW FIELD: Tracks last portal creation for spam prevention
-	IsBossEquipmentActive bool          // flag for barb leveling
-	Drop                  *drop.Manager // Drop: Per-supervisor Drop manager
+	ManualModeActive      bool                // Manual play mode: stops after character selection
+	LastPortalTick        time.Time           // NEW FIELD: Tracks last portal creation for spam prevention
+	IsBossEquipmentActive bool                // flag for barb leveling
+	Drop                  *drop.Manager       // Drop: Per-supervisor Drop manager
+	GroupLevelingState    *GroupLevelingState // Group leveling runtime state
+	ICCManager            interface{}         // ICC Manager for group coordination (interface to avoid circular import)
+}
+
+type GroupLevelingState struct {
+	IsLeader         bool
+	GroupName        string
+	CurrentLeader    string
+	MyRole           string
+	GroupMembers     map[string]string // CharName → Role
+	LastGameName     string
+	LastGamePassword string
+	LeaderLastSeen   time.Time
+	QuestCredits     map[string]bool // QuestID → Completed
+	BossKillCredits  map[string]bool // BossName → Killed
 }
 
 type Debug struct {

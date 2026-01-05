@@ -28,10 +28,12 @@ type SupervisorManager struct {
 	supervisors    map[string]Supervisor
 	crashDetectors map[string]*game.CrashDetector
 	eventListener  *event.Listener
-	Drop           *drop.Service // Drop: Service façade to manage Drop domain
+	Drop           *drop.Service       // Drop: Service façade to manage Drop domain
+	iccManager     *context.ICCManager // ICC Manager for multi-bot coordination
 }
 
 func NewSupervisorManager(logger *slog.Logger, eventListener *event.Listener) *SupervisorManager {
+	iccMgr := context.NewICCManager(logger)
 
 	return &SupervisorManager{
 		logger:         logger,
@@ -39,6 +41,7 @@ func NewSupervisorManager(logger *slog.Logger, eventListener *event.Listener) *S
 		crashDetectors: make(map[string]*game.CrashDetector),
 		eventListener:  eventListener,
 		Drop:           drop.NewService(logger),
+		iccManager:     iccMgr,
 	}
 }
 
@@ -172,6 +175,9 @@ func (mng *SupervisorManager) Stop(supervisor string) {
 		// Stop the Supervisor's internal loops and kill the client if configured
 		s.Stop()
 
+		// Unregister from ICC Manager
+		mng.iccManager.UnregisterSupervisor(supervisor)
+
 		// Delete from the list of active Supervisors
 		delete(mng.supervisors, supervisor)
 
@@ -285,6 +291,7 @@ func (mng *SupervisorManager) buildSupervisor(supervisorName string, logger *slo
 	pf.SetPacketSender(ctx.PacketSender)
 	ctx.BeltManager = bm
 	ctx.HealthManager = hm
+	ctx.ICCManager = mng.iccManager // Set ICC Manager for multi-bot coordination
 	char, err := character.BuildCharacter(ctx.Context)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error creating character: %w", err)
@@ -303,6 +310,9 @@ func (mng *SupervisorManager) buildSupervisor(supervisorName string, logger *slo
 	}
 
 	supervisor.GetContext().StopSupervisorFn = supervisor.Stop
+
+	// Register supervisor with ICC Manager
+	mng.iccManager.RegisterSupervisor(supervisorName, supervisor)
 
 	// Drop: Attach Drop manager to Drop service (filters, callbacks, queued requests)
 	if mng.Drop != nil {

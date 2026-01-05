@@ -214,3 +214,109 @@ func ResetCompanionGameInfo(be BaseEvent, leader string) ResetCompanionGameInfoE
 		Leader:    leader,
 	}
 }
+
+// --- Group Leveling Events ---
+
+// ActStartEvent is broadcast when leader starts a new act
+type ActStartEvent struct {
+	BaseEvent
+	GroupName string
+	ActNumber int
+}
+
+func ActStart(be BaseEvent, groupName string, actNumber int) ActStartEvent {
+	return ActStartEvent{
+		BaseEvent: be,
+		GroupName: groupName,
+		ActNumber: actNumber,
+	}
+}
+
+// QuestCompleteEvent is broadcast when a bot completes (or fails) a quest
+type QuestCompleteEvent struct {
+	BaseEvent
+	GroupName string
+	QuestID   string
+	Completed bool // true if bot got credit, false if failed
+}
+
+func QuestComplete(be BaseEvent, groupName string, questID string, completed bool) QuestCompleteEvent {
+	return QuestCompleteEvent{
+		BaseEvent: be,
+		GroupName: groupName,
+		QuestID:   questID,
+		Completed: completed,
+	}
+}
+
+// BossKillEvent is broadcast when a bot kills (or fails to get credit for) a boss
+type BossKillEvent struct {
+	BaseEvent
+	GroupName string
+	BossName  string
+	Killed    bool // true if bot got kill credit, false if failed
+}
+
+func BossKill(be BaseEvent, groupName string, bossName string, killed bool) BossKillEvent {
+	return BossKillEvent{
+		BaseEvent: be,
+		GroupName: groupName,
+		BossName:  bossName,
+		Killed:    killed,
+	}
+}
+
+// LeaderChangeEvent is broadcast when leader changes (e.g., due to missed quest/boss)
+type LeaderChangeEvent struct {
+	BaseEvent
+	GroupName string
+	NewLeader string
+	OldLeader string
+	Reason    string // "quest_missed", "boss_missed", "disconnect", "manual"
+}
+
+func LeaderChange(be BaseEvent, groupName string, newLeader string, oldLeader string, reason string) LeaderChangeEvent {
+	return LeaderChangeEvent{
+		BaseEvent: be,
+		GroupName: groupName,
+		NewLeader: newLeader,
+		OldLeader: oldLeader,
+		Reason:    reason,
+	}
+}
+
+// SynchroReadyEvent is broadcast when a bot is ready for a synchronization point
+type SynchroReadyEvent struct {
+	BaseEvent
+	GroupName   string
+	SynchroType string // "act1_start", "pre_andy", "waypoint_5", etc.
+	Ready       bool
+}
+
+func SynchroReady(be BaseEvent, groupName string, synchroType string, ready bool) SynchroReadyEvent {
+	return SynchroReadyEvent{
+		BaseEvent:   be,
+		GroupName:   groupName,
+		SynchroType: synchroType,
+		Ready:       ready,
+	}
+}
+
+// PositionUpdateEvent is broadcast periodically for leader position tracking
+type PositionUpdateEvent struct {
+	BaseEvent
+	GroupName string
+	AreaID    int
+	PosX      int
+	PosY      int
+}
+
+func PositionUpdate(be BaseEvent, groupName string, areaID int, posX int, posY int) PositionUpdateEvent {
+	return PositionUpdateEvent{
+		BaseEvent: be,
+		GroupName: groupName,
+		AreaID:    areaID,
+		PosX:      posX,
+		PosY:      posY,
+	}
+}

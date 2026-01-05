@@ -28,6 +28,7 @@
             <a href="#inventory-settings" aria-label="Inventory" title="Inventory"><i class="bi bi-grid-3x3-gap"></i><span class="nav-text">Inventory</span></a>
             <a href="#game-settings" aria-label="Game" title="Game"><i class="bi bi-controller"></i><span class="nav-text">Game</span></a>
             <a href="#companion-settings" aria-label="Companion" title="Companion"><i class="bi bi-people"></i><span class="nav-text">Companion</span></a>
+            <a href="#group-leveling-settings" aria-label="Group Leveling" title="Group Leveling"><i class="bi bi-people-fill"></i><span class="nav-text">Group Leveling</span></a>
             <a href="#run-settings" aria-label="Runs" title="Runs"><i class="bi bi-play-circle"></i><span class="nav-text">Runs</span></a>
             <a href="#gambling-settings" aria-label="Gambling" title="Gambling"><i class="bi bi-cash-coin"></i><span class="nav-text">Gambling</span></a>
             <a href="#muling-settings" aria-label="Muling" title="Muling"><i class="bi bi-box-seam"></i><span class="nav-text">Muling</span></a>
@@ -1041,6 +1042,47 @@
                 <input type="checkbox" name="companionLeader" id="companionLeader" {{ if .Config.Companion.Leader }}checked{{ end }}/>
                 Open tp for manual player
             </label>
+            <h3 id="group-leveling-settings">Group Leveling (ICC)</h3><br>
+            <fieldset>
+                <label>
+                    <input type="checkbox" name="groupLevelingEnabled" id="groupLevelingEnabled" {{ if .Config.GroupLeveling.Enabled }}checked{{ end }}/>
+                    Enable Group Leveling
+                </label>
+                <label>
+                    Group Name
+                    <input name="groupLevelingGroupName" placeholder="my-leveling-group" value="{{ .Config.GroupLeveling.GroupName }}"/>
+                    <small>Characters with the same group name will coordinate leveling together</small>
+                </label>
+                <label>
+                    Role
+                    <select name="groupLevelingRole" id="groupLevelingRole">
+                        <option value="auto" {{ if eq .Config.GroupLeveling.Role "auto" }}selected{{ end }}>Auto (detect from class)</option>
+                        <option value="leader" {{ if eq .Config.GroupLeveling.Role "leader" }}selected{{ end }}>Leader (creates games)</option>
+                        <option value="follower" {{ if eq .Config.GroupLeveling.Role "follower" }}selected{{ end }}>Follower</option>
+                        <option value="teleporter" {{ if eq .Config.GroupLeveling.Role "teleporter" }}selected{{ end }}>Teleporter (rush team)</option>
+                        <option value="bo_barb" {{ if eq .Config.GroupLeveling.Role "bo_barb" }}selected{{ end }}>BO Barb (provide buffs)</option>
+                        <option value="rusher" {{ if eq .Config.GroupLeveling.Role "rusher" }}selected{{ end }}>Rusher (quest runner)</option>
+                    </select>
+                    <small>Leader creates games and sets pace. Followers join leader's game automatically.</small>
+                </label>
+                <label>
+                    Leader Election Mode
+                    <select name="groupLevelingElectionMode" id="groupLevelingElectionMode">
+                        <option value="static" {{ if eq .Config.GroupLeveling.ElectionMode "static" }}selected{{ end }}>Static (use configured roles)</option>
+                        <option value="quest_credit" {{ if eq .Config.GroupLeveling.ElectionMode "quest_credit" }}selected{{ end }}>Quest Credit (auto-promote if quest missed)</option>
+                    </select>
+                    <small>Quest Credit mode automatically promotes a new leader if current leader misses quest credit</small>
+                </label>
+                <label>
+                    Group Members (Character Names)
+                    <input name="groupLevelingMembers" placeholder="CharName1,CharName2,CharName3" value="{{ range $i, $member := .Config.GroupLeveling.Members }}{{ if $i }},{{ end }}{{ $member }}{{ end }}"/>
+                    <small><strong>IMPORTANT:</strong> List all character names in your group (comma-separated). This ensures the leader waits for ALL members before starting. Leave empty to use dynamic discovery (NOT recommended - may cause race conditions).</small>
+                </label>
+                <div style="background-color: rgba(var(--pico-primary-background), 0.1); padding: 1rem; border-radius: var(--pico-border-radius); margin-top: 1rem;">
+                    <h6 style="margin-bottom: 0.5rem;">Group Status</h6>
+                    <small>Group coordination info will appear here when bots are running</small>
+                </div>
+            </fieldset>
             <h4 id="run-settings">Run Settings</h4><br>
             <label>
                 Choose the runs that you want the bot to run. You can either drag & drop runs below to enable or disable them, or use the + - buttons. Click on any of the runs to expand them and see more details and options.
