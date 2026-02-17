@@ -5,6 +5,7 @@ import (
 
 	"github.com/hectorgimenez/d2go/pkg/data"
 	"github.com/hectorgimenez/d2go/pkg/data/item"
+	"github.com/hectorgimenez/d2go/pkg/data/stat"
 	"github.com/hectorgimenez/d2go/pkg/nip"
 	"github.com/hectorgimenez/koolo/internal/action/step"
 	"github.com/hectorgimenez/koolo/internal/context"
@@ -456,4 +457,14 @@ func DrinkAllPotionsInInventory() {
 	}
 
 	step.CloseAllMenus()
+}
+
+func GetItemQuantity(itm data.Item) int {
+	if qty, found := itm.FindStat(stat.Quantity, 0); found && qty.Value > 0 {
+		return qty.Value
+	}
+	if itm.StackedQuantity > 0 {
+		return itm.StackedQuantity
+	}
+	return 1
 }
